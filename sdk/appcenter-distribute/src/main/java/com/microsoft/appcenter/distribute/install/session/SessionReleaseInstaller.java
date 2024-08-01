@@ -24,7 +24,6 @@ import androidx.annotation.WorkerThread;
 import com.microsoft.appcenter.distribute.install.AbstractReleaseInstaller;
 import com.microsoft.appcenter.distribute.install.ReleaseInstallerActivity;
 import com.microsoft.appcenter.utils.AppCenterLog;
-import com.microsoft.appcenter.utils.async.AppCenterConsumer;
 import com.microsoft.appcenter.utils.async.AppCenterFuture;
 
 import java.io.FileInputStream;
@@ -54,11 +53,6 @@ public class SessionReleaseInstaller extends AbstractReleaseInstaller {
     private static final int INVALID_SESSION_ID = -1;
 
     /**
-     * Timeout to check cancellation state in milliseconds.
-     */
-    private static final long CANCEL_TIMEOUT = 1000;
-
-    /**
      * Install status receiver. Keep the reference to unsubscribe it.
      */
     private BroadcastReceiver mInstallStatusReceiver;
@@ -67,12 +61,6 @@ public class SessionReleaseInstaller extends AbstractReleaseInstaller {
      * Install session callback. Keep the reference to unsubscribe it.
      */
     private PackageInstaller.SessionCallback mSessionCallback;
-
-    /**
-     * Tracking if user confirmation was requested.
-     * Needed to cancel the process in case of missing system callback.
-     */
-    private boolean mUserConfirmationRequested;
 
     /**
      * Current install session id.
@@ -119,18 +107,6 @@ public class SessionReleaseInstaller extends AbstractReleaseInstaller {
     }
 
     synchronized void onInstallProgress(int sessionId) {
-        if (mSessionId != sessionId) {
-            return;
-        }
-
-        /*
-         * Reset confirmation flag.
-         * Any progress event during user confirmation means that installation is not cancelled.
-         * The only reason to track it is that system dialog might be closed by clicking
-         * outside. In this case, Android doesn't produce any event, so we have to use it
-         * as workaround to mark installation as cancelled and re-try in case of mandatory update.
-         */
-        mUserConfirmationRequested = false;
     }
 
     synchronized void onInstallConfirmation(int sessionId, Intent confirmIntent) {
@@ -138,7 +114,6 @@ public class SessionReleaseInstaller extends AbstractReleaseInstaller {
             return;
         }
         AppCenterLog.info(LOG_TAG, "Ask confirmation to install a new release.");
-        mUserConfirmationRequested = true;
 
         /* Use proxy activity to handle closing event. */
         AppCenterFuture<ReleaseInstallerActivity.Result> confirmFuture = ReleaseInstallerActivity.startActivityForResult(mContext, confirmIntent);
@@ -147,15 +122,6 @@ public class SessionReleaseInstaller extends AbstractReleaseInstaller {
             /* Another installing activity already in progress. Precaution for unexpected case. */
             return;
         }
-        confirmFuture.thenAccept(new AppCenterConsumer<ReleaseInstallerActivity.Result>() {
-
-            @Override
-            public void accept(ReleaseInstallerActivity.Result result) {
-
-                /* Check for progress events after closing confirmation dialog. */
-                cancelIfNoProgress();
-            }
-        });
     }
 
     synchronized void onInstallError(int sessionId, String message) {
@@ -172,26 +138,6 @@ public class SessionReleaseInstaller extends AbstractReleaseInstaller {
         }
         mSessionId = INVALID_SESSION_ID;
         onCancel();
-    }
-
-    private void cancelIfNoProgress() {
-
-        /*
-         * In some cases progress event might be delayed a bit.
-         * Use threshold timeout to prevent false-alarming cancelling.
-         */
-        postDelayed(new Runnable() {
-
-            @Override
-            public void run() {
-
-                /* Cancels installation if this flag hasn't been reset by progress event. */
-                if (mUserConfirmationRequested) {
-                    AppCenterLog.error(LOG_TAG, "Canceling installation due to lack of progress.");
-                    onCancel();
-                }
-            }
-        }, CANCEL_TIMEOUT);
     }
 
     @WorkerThread
