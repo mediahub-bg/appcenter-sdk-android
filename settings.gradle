@@ -15,5 +15,5 @@ include ':sdk:appcenter-distribute-play'
 include ':test'
 
 // test apps
-include ':apps'
-include ':apps:sasquatch'
+// include ':apps'
+// include ':apps:sasquatch'
