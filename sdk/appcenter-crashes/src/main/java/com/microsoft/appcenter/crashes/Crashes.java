@@ -15,6 +15,7 @@ import androidx.annotation.VisibleForTesting;
 import androidx.annotation.WorkerThread;
 
 import com.microsoft.appcenter.AbstractAppCenterService;
+import com.microsoft.appcenter.AppCenter;
 import com.microsoft.appcenter.Constants;
 import com.microsoft.appcenter.Flags;
 import com.microsoft.appcenter.channel.Channel;
@@ -639,6 +640,8 @@ public class Crashes extends AbstractAppCenterService {
         final String userId = UserIdContext.getInstance().getUserId();
         final UUID errorId = UUID.randomUUID();
         final Map<String, String> validatedProperties = ErrorLogHelper.validateProperties(properties, "HandledError");
+        final String dataResidencyRegion = AppCenter.getDataResidencyRegion();
+
         post(new Runnable() {
 
             @Override
@@ -648,11 +651,17 @@ public class Crashes extends AbstractAppCenterService {
                 HandledErrorLog errorLog = new HandledErrorLog();
                 errorLog.setId(errorId);
                 errorLog.setUserId(userId);
+                errorLog.setDataResidencyRegion(dataResidencyRegion);
                 errorLog.setException(exceptionModelBuilder.buildExceptionModel());
                 errorLog.setProperties(validatedProperties);
                 mChannel.enqueue(errorLog, ERROR_GROUP, Flags.DEFAULTS);
 
                 /* Then attachments if any. */
+                if (attachments != null) {
+                    for (ErrorAttachmentLog attachment : attachments) {
+                        attachment.setDataResidencyRegion(dataResidencyRegion);
+                    }
+                }
                 sendErrorAttachment(errorId, attachments);
             }
         });
@@ -780,6 +789,7 @@ public class Crashes extends AbstractAppCenterService {
         errorLog.setProcessName("");
         try {
             String savedUserId = ErrorLogHelper.getStoredUserInfo(minidumpFolder);
+            String dataResidencyRegion = ErrorLogHelper.getStoredDataResidencyRegion(minidumpFolder);
             Device savedDeviceInfo = ErrorLogHelper.getStoredDeviceInfo(minidumpFolder);
             if (savedDeviceInfo == null) {
 
@@ -792,6 +802,7 @@ public class Crashes extends AbstractAppCenterService {
             }
             errorLog.setDevice(savedDeviceInfo);
             errorLog.setUserId(savedUserId);
+            errorLog.setDataResidencyRegion(dataResidencyRegion);
             saveErrorLogFiles(new NativeException(), errorLog);
             if (!minidumpFile.renameTo(dest)) {
                 throw new IOException("Failed to move file");
@@ -1033,6 +1044,7 @@ public class Crashes extends AbstractAppCenterService {
                                 dumpFile = new File(minidumpFilePath);
                                 byte[] logfileContents = FileManager.readBytes(dumpFile);
                                 dumpAttachment = ErrorAttachmentLog.attachmentWithBinary(logfileContents, "minidump.dmp", "application/octet-stream");
+                                dumpAttachment.setTimestamp(errorLogReport.log.getTimestamp());
                             } else {
                                 AppCenterLog.warn(LOG_TAG, "NativeException found without minidump.");
                             }

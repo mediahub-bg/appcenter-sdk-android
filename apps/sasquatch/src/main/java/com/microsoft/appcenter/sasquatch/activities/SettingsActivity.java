@@ -13,6 +13,7 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.FileObserver;
 import android.preference.CheckBoxPreference;
@@ -129,6 +130,35 @@ public class SettingsActivity extends AppCompatActivity {
                                             .apply();
                                     preference.setSummary(input.getText());
                                     Toast.makeText(getActivity(), getActivity().getString(R.string.country_code_save_message), Toast.LENGTH_SHORT).show();
+                                }
+                            })
+                            .setNegativeButton(R.string.cancel, null)
+                            .create().show();
+                    return true;
+                }
+            });
+            initClickableSetting(R.string.data_residency_region_key, MainActivity.sSharedPreferences.getString(getActivity().getString(R.string.data_residency_region_key), null), new Preference.OnPreferenceClickListener() {
+
+                @Override
+                public boolean onPreferenceClick(final Preference preference) {
+                    final EditText input = new EditText(getActivity());
+                    input.setInputType(InputType.TYPE_CLASS_TEXT);
+                    input.setHint(R.string.data_residency_region_title);
+                    input.setText(MainActivity.sSharedPreferences.getString(getActivity().getString(R.string.data_residency_region_key), null));
+                    input.setSelection(input.getText().length());
+                    new AlertDialog.Builder(getActivity()).setTitle(R.string.data_residency_region_title).setView(input)
+                            .setPositiveButton(R.string.save, new DialogInterface.OnClickListener() {
+
+                                @SuppressLint("CommitPrefEdits")
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    MainActivity.sSharedPreferences
+                                            .edit()
+                                            .putString(getActivity().getString(R.string.data_residency_region_key), input.getText().toString())
+                                            .apply();
+                                    preference.setSummary(input.getText());
+                                    AppCenter.setDataResidencyRegion(input.getText().toString());
+                                    Toast.makeText(getActivity(), getActivity().getString(R.string.data_residency_region_save_message), Toast.LENGTH_SHORT).show();
                                 }
                             })
                             .setNegativeButton(R.string.cancel, null)
@@ -710,7 +740,7 @@ public class SettingsActivity extends AppCompatActivity {
             if (requestCode == FILE_ATTACHMENT_DIALOG_ID) {
                 Uri fileAttachment = resultCode == RESULT_OK && data != null ? data.getData() : null;
                 if (fileAttachment != null) {
-                    getActivity().getContentResolver().takePersistableUriPermission(fileAttachment, data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                    getActivity().getContentResolver().takePersistableUriPermission(fileAttachment, Intent.FLAG_GRANT_READ_URI_PERMISSION);
                 }
                 MainActivity.setFileAttachment(fileAttachment);
                 Preference preference = getPreferenceManager().findPreference(getString(R.string.appcenter_crashes_file_attachment_key));
